@@ -3,10 +3,10 @@ export default async function handler(req, res) {
     const { code, state: userId } = req.query;
 
     if (!code || !userId) {
-      return res.status(400).send('Missing code or user ID');
+      return res.status(400).send('Missing code or userId');
     }
 
-    // 1. Intercambia el code por tokens en HubSpot
+    // Intercambia el code por tokens
     const tokenRes = await fetch('https://api.hubapi.com/oauth/v1/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -19,34 +19,37 @@ export default async function handler(req, res) {
       })
     });
 
-    const tokenData = await tokenRes.json();
+    const data = await tokenRes.json();
 
-    if (!tokenData.access_token) {
-      return res.status(500).send('Failed to get HubSpot tokens');
+    if (!tokenRes.ok) {
+      console.error('Error fetching tokens from HubSpot:', data);
+      return res.status(500).send('Failed to get tokens from HubSpot');
     }
 
-    // 2. Envía tokens a Base44
+    // Envía los tokens a Base44
     const base44Res = await fetch('https://sales-climber-ef437b1b.base44.app/api/functions/hubspotCallback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         userId,
-        hubspot_access_token: tokenData.access_token,
-        hubspot_refresh_token: tokenData.refresh_token,
-        hubspot_expires_at: Date.now() + tokenData.expires_in * 1000
+        hubspot_access_token: data.access_token,
+        hubspot_refresh_token: data.refresh_token,
+        hubspot_expires_at: Date.now() + data.expires_in * 1000
       })
     });
 
+    const base44Data = await base44Res.json();
+
     if (!base44Res.ok) {
-      const errText = await base44Res.text();
-      return res.status(500).send('Error sending tokens to Base44: ' + errText);
+      console.error('Error sending tokens to Base44:', base44Data);
+      return res.status(500).send('Error sending tokens to Base44');
     }
 
-    // 3. Mensaje final al usuario
+    // Todo ok
     res.send('HubSpot connected. You can close this window.');
 
-  } catch (error) {
-    console.error('Callback error:', error);
-    res.status(500).send('Internal Server Error: ' + error.message);
+  } catch (err) {
+    console.error('Callback error:', err);
+    res.status(500).send('Internal Server Error');
   }
 }
