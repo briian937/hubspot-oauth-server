@@ -1,12 +1,12 @@
 export default async function handler(req, res) {
-  const { code, state: userId } = req.query;
-
-  if (!code || !userId) {
-    return res.status(400).send('Missing code or state');
-  }
-
   try {
-    // Intercambia el code por access & refresh tokens
+    const { code, state: userId } = req.query;
+
+    if (!code || !userId) {
+      return res.status(400).send('Missing code or user ID');
+    }
+
+    // 1. Intercambia el code por tokens en HubSpot
     const tokenRes = await fetch('https://api.hubapi.com/oauth/v1/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -21,12 +21,11 @@ export default async function handler(req, res) {
 
     const tokenData = await tokenRes.json();
 
-    if (!tokenRes.ok) {
-      console.error('Failed to exchange code for token:', tokenData);
-      return res.status(500).send('Error exchanging code for token');
+    if (!tokenData.access_token) {
+      return res.status(500).send('Failed to get HubSpot tokens');
     }
 
-    // Envía tokens a Base44
+    // 2. Envía tokens a Base44
     const base44Res = await fetch('https://sales-climber-ef437b1b.base44.app/api/functions/hubspotCallback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -40,22 +39,14 @@ export default async function handler(req, res) {
 
     if (!base44Res.ok) {
       const errText = await base44Res.text();
-      console.error('Failed to send tokens to Base44:', errText);
-      return res.status(500).send('Error sending tokens to Base44');
+      return res.status(500).send('Error sending tokens to Base44: ' + errText);
     }
 
-    // ✅ Todo correcto, cerramos la ventana automáticamente
-    res.setHeader('Content-Type', 'text/html');
-    res.send(`
-      <script>
-        alert('HubSpot connected successfully!');
-        window.close();
-      </script>
-      <p>If the window does not close automatically, you can close it manually.</p>
-    `);
+    // 3. Mensaje final al usuario
+    res.send('HubSpot connected. You can close this window.');
 
-  } catch (err) {
-    console.error('Callback error:', err);
-    res.status(500).send('Unexpected error');
+  } catch (error) {
+    console.error('Callback error:', error);
+    res.status(500).send('Internal Server Error: ' + error.message);
   }
 }
