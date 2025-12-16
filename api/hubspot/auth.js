@@ -1,15 +1,13 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.4';
+export default function handler(req, res) {
+  console.log('=== auth function reached ===');
 
-export default async function handler(req, res) {
   try {
-    const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
-
-    if (!user) {
-      return res.status(401).json({ error: 'Unauthorized' });
+    const clientId = process.env.HUBSPOT_CLIENT_ID;
+    if (!clientId) {
+      console.error('HUBSPOT_CLIENT_ID is not set in environment variables');
+      return res.status(500).json({ error: 'HUBSPOT_CLIENT_ID not defined' });
     }
 
-    const clientId = process.env.HUBSPOT_CLIENT_ID;
     const redirectUri = 'https://hubspot-oauth-server.vercel.app/api/hubspot/callback';
 
     const scopes = [
@@ -19,8 +17,8 @@ export default async function handler(req, res) {
       'crm.objects.owners.read'
     ].join(' ');
 
-    // Aquí usamos el user ID como state
-    const state = user.id;
+    // Genera un state simple (solo para prueba)
+    const state = Date.now().toString();
 
     const authUrl =
       'https://app.hubspot.com/oauth/authorize' +
@@ -29,7 +27,9 @@ export default async function handler(req, res) {
       `&scope=${encodeURIComponent(scopes)}` +
       `&state=${state}`;
 
-    // Redirige al usuario a HubSpot
+    console.log('Redirecting user to HubSpot auth URL:', authUrl);
+
+    // Redirige al usuario
     res.writeHead(302, { Location: authUrl });
     res.end();
 
